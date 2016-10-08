@@ -8,7 +8,7 @@
 
 """
 
-import config_local
+import config
 import time
 from datetime import datetime, timedelta
 import telebot
@@ -16,9 +16,6 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import os
-
-config = config_local
-
 
 
 filePath = os.path.join(config.MESSAGES_FOLDER, config.FILE_NAME)
