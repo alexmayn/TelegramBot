@@ -9,3 +9,7 @@ TIMEOUT = 3400
 
 username = 'admin@gmail.com'
 password = '123'
+
+fromaddr = 'admin <admin@gmail.com>'
+toaddr =   'users <users@gmail.com>'
+subj =     'Message from: Telegram group'

@@ -8,7 +8,7 @@
 
 """
 
-import config
+import config_local
 import time
 from datetime import datetime, timedelta
 import telebot
@@ -17,10 +17,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import os
 
+config = config_local
 
-fromaddr = 'Admin <admin@gmail.com>'
-toaddr =   'Administrator <users@gmail.com>'
-subj =     'Message from:Telegram group'
+
 
 filePath = os.path.join(config.MESSAGES_FOLDER, config.FILE_NAME)
 
@@ -68,13 +67,13 @@ def sendMessages():
     messagesToSend = ''.join(messagesToSend)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subj
-    msg["From"] = fromaddr
-    msg["To"] = toaddr
+    msg["Subject"] = config.subj
+    msg["From"] = config.fromaddr
+    msg["To"] = config.toaddr
     text = "".join(messagesToSend)
     part1 = MIMEText(text.encode("utf-8"), "plain", "utf-8")
     msg.attach(part1)
-    server.sendmail(fromaddr, toaddr, msg.as_string().encode('ascii'))
+    server.sendmail(config.fromaddr, config.toaddr, msg.as_string().encode('ascii'))
 
 @bot.message_handler(content_types=['document', 'audio'])
 def handle_docs_audio(message):
