@@ -27,8 +27,6 @@ fromaddr = 'Tihik Angel <tomskchrist.tihik@gmail.com>'
 toaddr =   'Administrator <maynagashev@gmail.com>'
 subj =     'Message from: Ministers Telegram group'
 
-username = 'tomskchrist.tihik@gmail.com'
-password = 'ALJEg#Ysn5&hGRFv#ozh7S&S9cav@z6F'
 filePath = os.path.join(config.MESSAGES_FOLDER, config.FILE_NAME)
 
 server = smtplib.SMTP('smtp.gmail.com:587')
@@ -50,10 +48,11 @@ print(updates)
 
 # Run smtp server
 server.starttls()
-server.login(username, password)
+server.login(config.username, config.password)
 
 start = datetime.now()
 
+#TODO: remove it
 def listener(messages):
     for m in messages:
         print(str(m))
