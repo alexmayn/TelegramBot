@@ -1,4 +1,6 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 """
   Based on pyTelegramBotyAPI
   GitHub: https://github.com/eternnoir/pyTelegramBotAPI
@@ -8,75 +10,47 @@
 
 """
 
-import config_local
 import cherrypy
-import time
-from datetime import datetime, timedelta
 import telebot
+import logging
+import config
+from datetime import datetime, timedelta
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import os
-import logging
 
-config = config_local
+#config = config_local
 
-WEBHOOK_HOST = 'IP_Address'
-WEBHOOK_PORT = 443
-WEBHOOK_LISTEN = '0.0.0.0'
+API_TOKEN = config.token
 
-WEBHOOK_SSL_CERT = './webhook_cert.pem'
-WEBHOOK_SSL_PRIV = './webhook_pkey.pem'
+WEBHOOK_HOST = config.webHookHost # '<ip/host where the bot is running>'
+WEBHOOK_PORT = 8443  # 443, 80, 88 or 8443 (port need to be 'open')
+WEBHOOK_LISTEN = '0.0.0.0'  # In some VPS you may need to put here the IP addr
+
+WEBHOOK_SSL_CERT = './webhook_cert.pem'  # Path to the ssl certificate
+WEBHOOK_SSL_PRIV = './webhook_pkey.pem'  # Path to the ssl private key
+
+# Quick'n'dirty SSL certificate generation:
+#
+# openssl genrsa -out webhook_pkey.pem 2048
+# openssl req -new -x509 -days 3650 -key webhook_pkey.pem -out webhook_cert.pem
+#
+# When asked for "Common Name (e.g. server FQDN or YOUR name)" you should reply
+# with the same value in you put in WEBHOOK_HOST
 
 WEBHOOK_URL_BASE = "https://%s:%s" % (WEBHOOK_HOST, WEBHOOK_PORT)
-WEBHOOK_URL_PATH = "/%s/" % (config.token)
+WEBHOOK_URL_PATH = "/%s/" % (API_TOKEN)
 
 
-
-logger = logging.basicConfig(filename='bot.log', level=logging.DEBUG)
-
-config = config_local
 filePath = os.path.join(config.MESSAGES_FOLDER, config.FILE_NAME)
+print(filePath)
 
-server = smtplib.SMTP('smtp.gmail.com:587')
-server.ehlo()
-server.set_debuglevel(1)
+logger = telebot.logger
+telebot.logger.setLevel(logging.INFO)
 
-bot = telebot.TeleBot(config.token)
-
-messagesToSend = []
-# getMe
-#user = bot.get_me()
-#logging.info('User {}'.format(user))
-
-# getUpdates
-#updates = bot.get_updates(1234, 100, 20) #get_Updates(offset, limit, timeout):
-#logging.info('Updates: {}'.format(updates))
-
-
-start = datetime.now()
-
-class WebhookServer(object):
-    @cherrypy.expose
-    def index(self):
-        if 'content-length' in cherrypy.request.headers and \
-                        'content-type' in cherrypy.request.headers and \
-                        cherrypy.request.headers['content-type'] == 'application/json':
-            length = int(cherrypy.request.headers['content-length'])
-            json_string = cherrypy.request.body.read(length).decode("utf-8")
-            update = telebot.types.Update.de_json(json_string)
-
-            bot.process_new_updates([update])
-            return ''
-        else:
-            raise cherrypy.HTTPError(403)
-
-
-#TODO: remove it
-def listener(messages):
-    for m in messages:
-        print(str(m))
-
+bot = telebot.TeleBot(API_TOKEN)
+start = datetime.utcnow()
 
 def sendMessages():
     '''
@@ -84,6 +58,10 @@ def sendMessages():
     :param message:
     :return:
     '''
+    server = smtplib.SMTP('smtp.gmail.com:587')
+    server.ehlo()
+    server.set_debuglevel(1)
+
     # Run smtp server
     server.starttls()
     server.login(config.username, config.password)
@@ -102,12 +80,37 @@ def sendMessages():
     text = "".join(messagesToSend)
     part1 = MIMEText(text.encode("utf-8"), "plain", "utf-8")
     msg.attach(part1)
-    logging.info('Trying send message to e-mail')
+    logger.info('Trying send message to e-mail')
     try:
         server.sendmail(config.fromaddr, config.toaddr, msg.as_string().encode('ascii'))
-
+        logger.info('Send succcess!')
     finally:
         server.close()
+
+
+# WebhookServer, process webhook calls
+class WebhookServer(object):
+    @cherrypy.expose
+    def index(self):
+        if 'content-length' in cherrypy.request.headers and \
+           'content-type' in cherrypy.request.headers and \
+           cherrypy.request.headers['content-type'] == 'application/json':
+            length = int(cherrypy.request.headers['content-length'])
+            json_string = cherrypy.request.body.read(length).decode("utf-8")
+            update = telebot.types.Update.de_json(json_string)
+            bot.process_new_updates([update])
+            return ''
+        else:
+            raise cherrypy.HTTPError(403)
+
+
+# Handle '/start' and '/help'
+@bot.message_handler(commands=['help', 'start'])
+def send_welcome(message):
+    bot.reply_to(message,
+                 ("Hi there, I am a bot Tihik.\n"
+                  "I am here to provide you messages from Church groups."))
+
 
 @bot.message_handler(content_types=['document', 'audio'])
 def handle_docs_audio(message):
@@ -116,14 +119,15 @@ def handle_docs_audio(message):
     """
     pass
 
-@bot.message_handler(func=lambda m: True, content_types=['text'])
-def repeat_all_messages(message):
-    global messagesToSend
-    global timeout
-    global start
 
+# Handle all other messages
+@bot.message_handler(func=lambda message: True, content_types=['text'])
+def echo_message(message):
+    global start
+    logger.info('message was response %s' % (message.text))
     # This is filter by group Id
     if message.text and (message.chat.id == config.MINIST_GROUP_CHAT_ID or message.chat.id == config.BOT_CHAT_ID):
+        logger.info('start performing...')
         if message.from_user.first_name != None:
             authorName = message.from_user.first_name
         else:
@@ -133,8 +137,8 @@ def repeat_all_messages(message):
             authorName = '{0} {1}'.format(authorName, message.from_user.last_name)
         else:
             authorName
-        #messageTime = message.date #datetime.fromtimestamp(message.date).strftime('%Y %m %d  %H:%M:%S')
-        text = "\n{0} - {1}: \n {2}".format('Date:', authorName, message.text)
+        messageTime = datetime.fromtimestamp(int(message.date)).strftime('%Y-%m-%d  %H:%M:%S')
+        text = "\nDate: {0} - {1}: \n {2}".format(messageTime, authorName, message.text)
 
         '''
          Save all messages to file
@@ -142,26 +146,27 @@ def repeat_all_messages(message):
         with open(filePath, mode='a', encoding="utf8") as messgeFile:
             messgeFile.write(text)
             messgeFile.close()
-            logging.info('Added message: {}'.format(text))
-            logging.info('Time to send: {}'.format((start + timedelta(seconds=config.TIMEOUT))-datetime.now()))
+            logger.info('Added message: {}'.format(text))
+            logger.info('Time to send: {}, Send time {}, timedelta: {}'.format((start + timedelta(seconds=config.TIMEOUT))-datetime.utcnow(),
+                                                                                start + timedelta(seconds=config.TIMEOUT), timedelta(seconds=config.TIMEOUT)))
 
         '''
           Send all messages after timer is finished
         '''
-        if datetime.now() >= start + timedelta(seconds=config.TIMEOUT):
+        if datetime.utcnow() >=  start + timedelta(seconds=config.TIMEOUT):
             sendMessages()
             os.remove(filePath)
-            start = datetime.now()
+            start = datetime.utcfromtimestamp(message.date)
 
 
-#if __name__ == '__main__':
-#     bot.polling(none_stop=True)
-
+# Remove webhook, it fails sometimes the set if there is a previous webhook
 bot.remove_webhook()
 
-bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH,
+# Set webhook
+bot.set_webhook(url=WEBHOOK_URL_BASE+WEBHOOK_URL_PATH,
                 certificate=open(WEBHOOK_SSL_CERT, 'r'))
 
+# Start cherrypy server
 cherrypy.config.update({
     'server.socket_host': WEBHOOK_LISTEN,
     'server.socket_port': WEBHOOK_PORT,
@@ -171,5 +176,4 @@ cherrypy.config.update({
 })
 
 cherrypy.quickstart(WebhookServer(), WEBHOOK_URL_PATH, {'/': {}})
-
 
