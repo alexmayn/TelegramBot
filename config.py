@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 token = ''
-MESSAGES_FOLDER = "D:\PyCharm\TelegramBot\TelegramBot"
+MESSAGES_FOLDER = "/home/alex"
 FILE_NAME = 'min.msg'
 
 BOT_CHAT_ID = -1
